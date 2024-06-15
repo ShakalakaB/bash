@@ -29,3 +29,10 @@ echo "===> install crontab"
 sudo yum install cronie
 sudo systemctl start crond.service
 sudo systemctl enable crond.service
+
+# Choose download package from "https://dev.mysql.com/downloads/"
+echo "===> install MySQL client"
+sudo yum install -y https://dev.mysql.com/get/mysql84-community-release-el9-1.noarch.rpm
+sudo yum install -y mysql-community-client
+
+
