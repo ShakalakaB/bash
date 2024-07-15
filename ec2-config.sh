@@ -41,3 +41,7 @@ sudo yum install -y https://dev.mysql.com/get/mysql84-community-release-el9-1.no
 sudo yum install -y mysql-community-client
 
 
+# set github ssh key
+# create ssh/config file
+# set up nginx: copy and paste nginx.conf
+# Add crontab job: "CRON_JOB="0 0 */3 * * certbot -q renew""
