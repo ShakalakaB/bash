@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "===> Install git"
-sudo yum install git-2.39.2
+sudo yum install git-2.40.1
 
 echo "===> Install Nginx"
 sudo yum install nginx-1.22.1
@@ -17,7 +17,7 @@ sudo npm update corepack -g
 corepack enable
 
 echo "===> Install Docker"
-sudo yum install docker-20.10.17
+sudo yum install docker-25.0.3
 
 echo "===> Install docker-compose"
 sudo curl -L https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
@@ -29,7 +29,6 @@ sudo python3 -m venv /opt/certbot/
 sudo /opt/certbot/bin/pip install --upgrade pip
 sudo /opt/certbot/bin/pip install certbot certbot-nginx
 sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
-
 
 echo "===> Install crontab"
 sudo yum install cronie
