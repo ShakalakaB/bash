@@ -1,0 +1,10 @@
+# personal account: ShakalakaB - the default config
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/github-aldora
+
+Host raki.github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/github-raki
