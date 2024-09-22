@@ -27,6 +27,8 @@ sudo yum install docker-25.0.3
 echo "🤖================>  Install docker-compose"
 sudo curl -L https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
+# Start docker
+systemctl start docker
 
 echo "🤖================>  Install certbot"
 sudo dnf install -y augeas-libs
@@ -52,6 +54,7 @@ sudo yarn global add pm2@5.4.2
 # set github ssh key
 echo "🤖================> Set github ssh key"
 ssh-keygen -t ed25519 -C "rakihubo@gmail.com" -f "/root/.ssh/github-raki" -N ""
+ssh-keygen -t ed25519 -C "aldora988@gmail.com" -f "/root/.ssh/github-aldora" -N ""
 
 # create ssh/config file
 echo "🤖================> Create ssh/config file"
