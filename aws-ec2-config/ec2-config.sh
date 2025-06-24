@@ -67,4 +67,4 @@ cp ./nginx.conf /etc/nginx/nginx.conf
 # Add crontab job: auto renew domain certs
 #todo: change the 'ec2-xx'
 echo "🤖================>  Add crontab job"
-(crontab -l; echo '0 0 */3 * * certbot -q renew && curl -fsS -X POST https://hc-ping.com/07b9ddd2-9b38-4a78-854f-89af632495c4/fail -d "message=ec2-xx') | crontab -
+(crontab -l; echo '0 0 */3 * * certbot -q renew && curl -fsS -X POST https://hc-ping.com/07b9ddd2-9b38-4a78-854f-89af632495c4 -d "message=ec2-xx"') | crontab -
