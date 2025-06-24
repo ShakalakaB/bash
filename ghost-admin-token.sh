@@ -1,5 +1,6 @@
 # Admin API key goes here
-KEY="66aa76b16477dd0001d88037:b903d6e1e34ec77d4db6994f3295017e6ad9466eb238c5c48eebfc2755823bc3"
+KEY="66cacb264d4eb60001c571ef:a858aab5990596a538541a415862e31668364882b38f4830ff6908c86696d560";
+
 
 # Split the key into ID and SECRET
 TMPIFS=$IFS
@@ -35,4 +36,5 @@ signature=$(printf '%s' "${header_payload}" | openssl dgst -binary -sha256 -mac 
 
 TOKEN="${header_payload}.${signature}"
 
+echo "token"
 echo $TOKEN
