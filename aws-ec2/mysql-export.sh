@@ -122,10 +122,16 @@ LOCAL_DIR="${OUT_DIR}/${EC2_HOST}_${TIMESTAMP}"
 ########################################
 # Begin export
 ########################################
-echo "[+] Starting MySQL export from ${EC2_HOST} …"
-echo "[+] Creating remote directory: ${REMOTE_DIR}"
+echo ""
+echo "📤 ============ MYSQL DATABASE EXPORT ============"
+echo "▶️  Starting MySQL export from ${EC2_HOST}"
+echo "📋 MySQL host: ${MYSQL_HOST}"
+echo "👤 MySQL user: ${MYSQL_USER}"
+echo "📁 Output directory: ${LOCAL_DIR}"
 
 # Run the remote export and capture the exit status
+echo ""
+echo "🔧 ============ REMOTE EXPORT PROCESS ============"
 if ! ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" \
   "sudo bash -s '${REMOTE_DIR}' '${MYSQL_USER}' '${MYSQL_PASS}' '${MYSQL_HOST}'" <<'EOSSH'
 #!/bin/bash
@@ -137,56 +143,77 @@ MYSQL_HOST="$4"
 export MYSQL_PWD="${MYSQL_PASS}"
 
 # Create export directory ownered by the invoking user (ec2-user)
+echo "📁 Creating remote directory: ${REMOTE_DIR}"
 mkdir -p "${REMOTE_DIR}"
 chown "$(whoami)":"$(whoami)" "${REMOTE_DIR}"
 
 # Test MySQL connection first
-echo "[remote] Testing MySQL connection..."
+echo "🔗 Testing MySQL connection..."
 if ! mysql -u "${MYSQL_USER}" -h "${MYSQL_HOST}" -e "SELECT 1;" >/dev/null 2>&1; then
-  echo "[remote] ERROR: Cannot connect to MySQL. Please check credentials and host."
+  echo "❌ ERROR: Cannot connect to MySQL. Please check credentials and host."
   exit 1
 fi
+echo "✅ MySQL connection successful"
 
 # Obtain list of non-system databases
-echo "[remote] Getting database list..."
+echo "📋 Getting database list..."
 DATABASES=$(mysql -u "${MYSQL_USER}" -h "${MYSQL_HOST}" --skip-column-names -e "SHOW DATABASES;")
 
 if [[ -z "${DATABASES}" ]]; then
-  echo "[remote] WARNING: No databases found or no access to SHOW DATABASES"
+  echo "⚠️  WARNING: No databases found or no access to SHOW DATABASES"
   exit 1
 fi
 
-DUMP_COUNT=0
+echo "📊 Found databases to export:"
+EXPORT_DBS=()
 for DB in ${DATABASES}; do
   case "${DB}" in
     information_schema|performance_schema|mysql|sys)
       continue ;; # skip system schemas
   esac
-  echo "[remote] Dumping \"${DB}\" …"
+  EXPORT_DBS+=("${DB}")
+  echo "   • ${DB}"
+done
+
+if [[ ${#EXPORT_DBS[@]} -eq 0 ]]; then
+  echo "⚠️  WARNING: No user databases found to export"
+  exit 1
+fi
+
+echo ""
+echo "🗄️  ============ DATABASE DUMPING ============"
+DUMP_COUNT=0
+TOTAL_DBS=${#EXPORT_DBS[@]}
+
+for DB in "${EXPORT_DBS[@]}"; do
+  ((DUMP_COUNT_DISPLAY = DUMP_COUNT + 1))
+  echo "[${DUMP_COUNT_DISPLAY}/${TOTAL_DBS}] 💾 Dumping \"${DB}\"..."
   if mysqldump -u "${MYSQL_USER}" -h "${MYSQL_HOST}" -p"${MYSQL_PASS}" \
     --complete-insert \
     "${DB}" > "${REMOTE_DIR}/${DB}.sql"; then
-    echo "[remote] Successfully dumped ${DB}"
+    echo "✅ Successfully dumped ${DB}"
     ((DUMP_COUNT++))
   else
-    echo "[remote] ERROR: Failed to dump ${DB}"
+    echo "❌ ERROR: Failed to dump ${DB}"
   fi
 done
 
-echo "[remote] Total databases dumped: ${DUMP_COUNT}"
+echo ""
+echo "📊 Export summary: ${DUMP_COUNT}/${TOTAL_DBS} databases exported successfully"
 
 # Check if any files were actually created
 if [[ ${DUMP_COUNT} -eq 0 ]]; then
-  echo "[remote] ERROR: No databases were successfully dumped"
+  echo "❌ ERROR: No databases were successfully dumped"
   exit 1
 fi
 
 # List the created files
-echo "[remote] Created files:"
+echo ""
+echo "📋 Created files:"
 ls -la "${REMOTE_DIR}/"
 EOSSH
 then
-  echo "[!] Remote export failed. Check the error messages above."
+  echo "❌ Remote export failed. Check the error messages above."
   exit 1
 fi
 
@@ -194,16 +221,28 @@ fi
 # Copy dumps to local machine
 ########################################
 
-echo "[+] Copying dumps to local directory: ${LOCAL_DIR}"
+echo ""
+echo "📥 ============ LOCAL FILE TRANSFER ============"
+echo "📁 Copying dumps to local directory: ${LOCAL_DIR}"
 mkdir -p "${LOCAL_DIR}"
 scp -i "${SSH_KEY}" -o StrictHostKeyChecking=no -r "${EC2_USER}@${EC2_HOST}:${REMOTE_DIR}/" "${LOCAL_DIR}/"
+echo "✅ Files copied successfully"
 
 ########################################
 # Remote cleanup
 ########################################
 
-echo "[+] Removing temporary files from remote instance"
+echo ""
+echo "🧹 Cleaning up temporary files from remote instance..."
 ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" \
   "sudo rm -rf ${REMOTE_DIR}"
+echo "✅ Remote cleanup completed"
 
-echo "[✓] All done! SQL files are available in: ${LOCAL_DIR}"
+echo ""
+echo "🎉 ============ EXPORT COMPLETED ============"
+echo "📁 SQL files are available in: ${LOCAL_DIR}"
+echo ""
+echo "📋 Next steps:"
+echo "   • Review the exported SQL files"
+echo "   • Import them to your target database using:"
+echo "     mysql -u username -p database_name < backup_file.sql"
