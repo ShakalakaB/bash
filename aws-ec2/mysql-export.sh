@@ -115,7 +115,7 @@ if [[ "${OUT_DIR}" =~ ^~(/.*)?$ ]]; then
   OUT_DIR="${OUT_DIR/#~/${HOME}}"
 fi
 
-TIMESTAMP="$(date +%F_%H-%M-%S)"
+TIMESTAMP="$(date +%F-%H%M%S)"
 REMOTE_DIR="/tmp/mysql_exports_${TIMESTAMP}"
 LOCAL_DIR="${OUT_DIR}/${EC2_HOST}_${TIMESTAMP}"
 
@@ -190,6 +190,7 @@ for DB in "${EXPORT_DBS[@]}"; do
   echo "[${DUMP_COUNT_DISPLAY}/${TOTAL_DBS}] 💾 Dumping \"${DB}\"..."
   if mysqldump -u "${MYSQL_USER}" -h "${MYSQL_HOST}" -p"${MYSQL_PASS}" \
     --complete-insert \
+    --set-gtid-purged=OFF \
     "${DB}" > "${REMOTE_DIR}/${DB}.sql"; then
     echo "✅ Successfully dumped ${DB}"
     ((DUMP_COUNT++))
