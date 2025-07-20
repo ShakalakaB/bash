@@ -14,11 +14,18 @@
 #   MYSQL_EXPORT_MYSQL_PASS="supersecret" \
 #   ./mysql-export.sh
 #
-#   # With explicit flags (overrides env vars)
+#   # Export specific databases
 #   ./mysql-export.sh \
 #     --ec2-host ec2-1-2-3-4.compute.amazonaws.com \
 #     --ssh-key ~/.ssh/my-key.pem \
-#     --mysql-user admin \
+#     --mysql-pass supersecret \
+#     --mysql-host database-1.caubw1tslulz.us-east-1.rds.amazonaws.com \
+#     --databases "db1,db2,db3"
+#
+#   # Export all databases (default behavior)
+#   ./mysql-export.sh \
+#     --ec2-host ec2-1-2-3-4.compute.amazonaws.com \
+#     --ssh-key ~/.ssh/my-key.pem \
 #     --mysql-pass supersecret \
 #     --mysql-host database-1.caubw1tslulz.us-east-1.rds.amazonaws.com
 #
@@ -30,6 +37,7 @@
 #   MYSQL_PASS     MySQL password (required)
 #   MYSQL_HOST     MySQL hostname as seen from inside the instance (default: localhost)
 #   OUT_DIR        Local directory where dumps will be placed (default: ./mysql_exports)
+#   DATABASES      Comma-separated list of specific databases to export (default: all)
 #
 # Exit immediately if a command exits with a non-zero status, treat unset
 # variables as an error, and fail if any element of a pipeline fails.
@@ -49,6 +57,7 @@ Options:
   --mysql-user USER     MySQL username (default: admin)
   --mysql-pass PASS     MySQL password (required)
   --mysql-host HOST     MySQL host inside the instance (required)
+  --databases LIST      Comma-separated list of databases to export (default: all non-system)
   --out DIR             Local output directory for dumps (default: ~/Desktop/mysql_exports)
   -h, --help            Show this help message
 
@@ -65,6 +74,7 @@ EC2_HOST="${MYSQL_EXPORT_EC2_HOST:-}"
 MYSQL_USER="${MYSQL_EXPORT_MYSQL_USER:-admin}"
 MYSQL_PASS="${MYSQL_EXPORT_MYSQL_PASS:-}"
 MYSQL_HOST="${MYSQL_EXPORT_MYSQL_HOST:-}"
+DATABASES="${MYSQL_EXPORT_DATABASES:-}"
 OUT_DIR="${MYSQL_EXPORT_OUT_DIR:-~/Desktop/mysql_exports}"
 
 ########################################
@@ -78,6 +88,7 @@ while [[ $# -gt 0 ]]; do
     --mysql-user) MYSQL_USER="$2";  shift 2;;
     --mysql-pass) MYSQL_PASS="$2";  shift 2;;
     --mysql-host) MYSQL_HOST="$2";  shift 2;;
+    --databases)  DATABASES="$2";   shift 2;;
     --out)       OUT_DIR="$2";      shift 2;;
     -h|--help)   usage; exit 0;;
     *) echo "Unknown argument: $1" >&2; usage; exit 1;;
@@ -127,18 +138,24 @@ echo "📤 ============ MYSQL DATABASE EXPORT ============"
 echo "▶️  Starting MySQL export from ${EC2_HOST}"
 echo "📋 MySQL host: ${MYSQL_HOST}"
 echo "👤 MySQL user: ${MYSQL_USER}"
+if [[ -n "${DATABASES}" ]]; then
+  echo "📋 Specific databases: ${DATABASES}"
+else
+  echo "📋 Exporting: All non-system databases"
+fi
 echo "📁 Output directory: ${LOCAL_DIR}"
 
 # Run the remote export and capture the exit status
 echo ""
 echo "🔧 ============ REMOTE EXPORT PROCESS ============"
 if ! ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" \
-  "sudo bash -s '${REMOTE_DIR}' '${MYSQL_USER}' '${MYSQL_PASS}' '${MYSQL_HOST}'" <<'EOSSH'
+  "sudo bash -s '${REMOTE_DIR}' '${MYSQL_USER}' '${MYSQL_PASS}' '${MYSQL_HOST}' '${DATABASES}'" <<'EOSSH'
 #!/bin/bash
 REMOTE_DIR="$1"
 MYSQL_USER="$2"
 MYSQL_PASS="$3"
 MYSQL_HOST="$4"
+DATABASES="$5"
 
 export MYSQL_PWD="${MYSQL_PASS}"
 
@@ -155,28 +172,48 @@ if ! mysql -u "${MYSQL_USER}" -h "${MYSQL_HOST}" -e "SELECT 1;" >/dev/null 2>&1;
 fi
 echo "✅ MySQL connection successful"
 
-# Obtain list of non-system databases
-echo "📋 Getting database list..."
-DATABASES=$(mysql -u "${MYSQL_USER}" -h "${MYSQL_HOST}" --skip-column-names -e "SHOW DATABASES;")
+# Determine which databases to export
+EXPORT_DBS=()
 
-if [[ -z "${DATABASES}" ]]; then
-  echo "⚠️  WARNING: No databases found or no access to SHOW DATABASES"
-  exit 1
+if [[ -n "${DATABASES}" ]]; then
+  # Export specific databases
+  echo "📋 Exporting specific databases: ${DATABASES}"
+  IFS=',' read -ra DB_ARRAY <<< "${DATABASES}"
+  for DB in "${DB_ARRAY[@]}"; do
+    DB=$(echo "${DB}" | xargs) # trim whitespace
+    if [[ -n "${DB}" ]]; then
+      # Verify the database exists
+      if mysql -u "${MYSQL_USER}" -h "${MYSQL_HOST}" -e "USE \`${DB}\`;" >/dev/null 2>&1; then
+        EXPORT_DBS+=("${DB}")
+        echo "   • ${DB} (verified exists)"
+      else
+        echo "   ⚠️  ${DB} (database not found or no access)"
+      fi
+    fi
+  done
+else
+  # Export all non-system databases
+  echo "📋 Getting all database list..."
+  ALL_DATABASES=$(mysql -u "${MYSQL_USER}" -h "${MYSQL_HOST}" --skip-column-names -e "SHOW DATABASES;")
+
+  if [[ -z "${ALL_DATABASES}" ]]; then
+    echo "⚠️  WARNING: No databases found or no access to SHOW DATABASES"
+    exit 1
+  fi
+
+  echo "📊 Found databases to export:"
+  for DB in ${ALL_DATABASES}; do
+    case "${DB}" in
+      information_schema|performance_schema|mysql|sys)
+        continue ;; # skip system schemas
+    esac
+    EXPORT_DBS+=("${DB}")
+    echo "   • ${DB}"
+  done
 fi
 
-echo "📊 Found databases to export:"
-EXPORT_DBS=()
-for DB in ${DATABASES}; do
-  case "${DB}" in
-    information_schema|performance_schema|mysql|sys)
-      continue ;; # skip system schemas
-  esac
-  EXPORT_DBS+=("${DB}")
-  echo "   • ${DB}"
-done
-
 if [[ ${#EXPORT_DBS[@]} -eq 0 ]]; then
-  echo "⚠️  WARNING: No user databases found to export"
+  echo "⚠️  WARNING: No databases found to export"
   exit 1
 fi
 
