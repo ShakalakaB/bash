@@ -157,6 +157,8 @@ while IFS= read -r -d '' file; do
   SQL_FILES+=("$file")
 done < <(find "${SQL_DIR}" -name "*.sql" -type f -print0 | sort -z)
 
+TOTAL_FILES=${#SQL_FILES[@]}
+
 if [[ ${#SQL_FILES[@]} -eq 0 ]]; then
   echo "❌ Error: No .sql files found in ${SQL_DIR}" >&2
   exit 1
@@ -217,6 +219,7 @@ echo "✅ MySQL connection successful"
 # Find SQL files in the copied directory
 echo "📋 Processing SQL files..."
 SQL_FILES=($(find "${REMOTE_DIR}" -name "*.sql" -type f | sort))
+TOTAL_FILES=${#SQL_FILES[@]}
 
 if [[ ${#SQL_FILES[@]} -eq 0 ]]; then
   echo "❌ ERROR: No SQL files found in ${REMOTE_DIR}"
